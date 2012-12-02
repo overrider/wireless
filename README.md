@@ -14,9 +14,8 @@ cp wireless /usr/local/bin/
 cp wireless.cfg /etc/
 
 Useage:
-# lists all wireless networks configured inside your config
-wireless
+lists all wireless networks configured inside your config
+./wireless
 
-# connects to network-name as long as it was found inside your config
-# and is in range
-wireless network-name 	
+connects to network-name as long as it was found inside your config and is in range
+./wireless network-name 	
