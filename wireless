@@ -1,0 +1,117 @@
+#!/usr/bin/perl
+
+# Copyright 2012 - BSDGuides.org
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+use strict;
+use warnings;
+
+my $config_file = "/etc/wireless.cfg";
+
+die("You need root privileges to run $0\n") unless $> eq 0;
+die("Could not open $config_file\n") unless -e -r $config_file;
+die("$0 wants to run under OpenBSD sorry\n") unless $^O eq "openbsd";
+
+system('clear');
+
+my %configuration;
+my $current_config;
+my $current_wlan;
+my @allowed_config_keys = ("interface","nwid","wpakey","name","type");
+
+open FILE,"<",$config_file or die("Could not open $config_file\n");
+
+while(<FILE>){
+	chomp;
+	next if($_ =~ m/^\s*$/);
+	next if($_ =~ m/^#/);
+
+	if($_ eq "[config]"){
+		$current_config = "config";
+		next;
+	}
+	if($_ eq "[network]"){
+		$current_config = "network";
+		$current_wlan += 1;
+		next;
+	}
+
+	die("Config error: We need a format of key=value on Line $.\n") unless $_ =~ m/^[a-z]+=.+$/;
+
+	my ($key,$value) = split("=",$_);
+	die("Config error: Unknown key: $key on Line $.\n") unless grep $_ eq $key, @allowed_config_keys;
+
+	if($current_config eq "config"){
+		$configuration{$current_config}{$key} = $value;
+	} elsif($current_config eq "network"){
+		$configuration{$current_config}{$current_wlan}{$key} = $value;
+	}
+}
+close(FILE);
+
+my %config = %{$configuration{'config'}};
+my %networks = %{$configuration{'network'}};
+die("Could not find name of wireless interface") unless defined $config{'interface'};
+
+print "Listing available networks:\n";
+print "-" x 50 . "\n\n";
+
+printf("%-20s %-20s %-10s\n","Network Name","SSID","Type");
+foreach my $index (keys %networks){
+	my %network = %{$networks{$index}};
+	printf("%-20s %-20s %-10s\n",$network{"name"},$network{"nwid"},$network{"type"});
+}
+
+print "\n";
+print "-" x 50 . "\n";
+print "Use ./wireless YOUR_NETWORK_NAME to connect\n\n";
+
+if(@ARGV){
+	my $command = shift(@ARGV);
+	my %connect;
+	foreach my $index (keys %networks){
+		my %network = %{$networks{$index}};
+		if(uc($network{"name"}) eq uc($command)){
+			%connect = %network;
+		} else {
+			next;
+		}
+	}
+	if(scalar(keys %connect) > 0){
+		&connect_to_wlan($config{'interface'},$connect{'nwid'},$connect{'wpakey'},$connect{'type'});
+	} else {
+		print "Network $command not found\n";
+	}
+}
+
+sub connect_to_wlan {
+	my ($interface, $nwid, $wpakey,$type) = @_; 
+	print "Connecting to SSID $nwid on $interface\n";
+	if(lc($type) eq 'open'){
+		system("ifconfig $interface nwid \"$nwid\"");
+	} elsif(lc($type) eq 'wpa'){
+		system("ifconfig $interface nwid \"$nwid\" wpakey \"$wpakey\"");
+	} else {
+		die("Unknown Type: $type\n");
+	}
+	print "Getting a IP address via DHCP\n";
+	system("dhclient $interface");
+}
