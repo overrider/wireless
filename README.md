@@ -19,3 +19,5 @@ lists all wireless networks configured inside your config
 
 connects to network-name as long as it was found inside your config and is in range
 ./wireless network-name 	
+
+Want to see more on how it works? http://www.bsdguides.org/2012/a-simple-console-wireless-network-manager-for-openbsd/
