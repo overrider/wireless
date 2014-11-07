@@ -25,6 +25,9 @@ use strict;
 use warnings;
 
 my $config_file = "/etc/wireless.cfg";
+sub configure_wlan;
+sub dhclient;
+sub ifdown;
 
 die("You need root privileges to run $0\n") unless $> eq 0;
 die("Could not open $config_file\n") unless -e -r $config_file;
@@ -35,7 +38,7 @@ system('clear');
 my %configuration;
 my $current_config;
 my $current_wlan;
-my @allowed_config_keys = ("interface","nwid","wpakey","name","type");
+my @allowed_config_keys = ("interface","wired_interface","wireless_interface","nwid","wpakey","name","type");
 
 open FILE,"<",$config_file or die("Could not open $config_file\n");
 
@@ -54,7 +57,7 @@ while(<FILE>){
 		next;
 	}
 
-	die("Config error: We need a format of key=value on Line $.\n") unless $_ =~ m/^[a-z]+=.+$/;
+	die("Config error: We need a format of key=value on Line $.\n") unless $_ =~ m/^\w+=.+$/;
 
 	my ($key,$value) = split("=",$_);
 	die("Config error: Unknown key: $key on Line $.\n") unless grep $_ eq $key, @allowed_config_keys;
@@ -69,7 +72,10 @@ close(FILE);
 
 my %config = %{$configuration{'config'}};
 my %networks = %{$configuration{'network'}};
-die("Could not find name of wireless interface") unless defined $config{'interface'};
+
+my $wireless_interface = $config{'wireless_interface'} || $config{'interface'}
+	or die("Could not find name of wireless interface");
+my $wired_interface = $config{'wired_interface'};
 
 print "Listing available networks:\n";
 print "-" x 50 . "\n\n";
@@ -77,7 +83,7 @@ print "-" x 50 . "\n\n";
 printf("%-20s %-20s %-10s\n","Network Name","SSID","Type");
 foreach my $index (keys %networks){
 	my %network = %{$networks{$index}};
-	printf("%-20s %-20s %-10s\n",$network{"name"},$network{"nwid"},$network{"type"});
+	printf("%-20s %-20s %-10s\n",$network{"name"},($network{"nwid"} || "-"),$network{"type"});
 }
 
 print "\n";
@@ -96,15 +102,23 @@ if(@ARGV){
 		}
 	}
 	if(scalar(keys %connect) > 0){
-		&connect_to_wlan($config{'interface'},$connect{'nwid'},$connect{'wpakey'},$connect{'type'});
+		if ($connect{'type'} eq 'wired') {
+			die ("Could not find name of wired interface") unless $wired_interface;
+			ifdown($wireless_interface);
+			dhclient($wired_interface);
+		} else {
+			ifdown($wired_interface) if $wired_interface;
+			configure_wlan($wireless_interface,$connect{'nwid'},$connect{'wpakey'},$connect{'type'});
+			dhclient($wireless_interface);
+		}
 	} else {
 		print "Network $command not found\n";
 	}
 }
 
-sub connect_to_wlan {
+sub configure_wlan {
 	my ($interface, $nwid, $wpakey,$type) = @_; 
-	print "Connecting to SSID $nwid on $interface\n";
+	print "Configuring SSID $nwid on $interface\n";
 	if(lc($type) eq 'open'){
 		system("ifconfig $interface nwid \"$nwid\"");
 	} elsif(lc($type) eq 'wpa'){
@@ -112,6 +126,16 @@ sub connect_to_wlan {
 	} else {
 		die("Unknown Type: $type\n");
 	}
-	print "Getting a IP address via DHCP\n";
+}
+
+sub dhclient {
+	my $interface = shift;
+	print "Getting an IP address on $interface via DHCP\n";
 	system("dhclient $interface");
+}
+
+sub ifdown {
+	my $interface = shift;
+	print "Bringing $interface down\n";
+	system("ifconfig $interface down");
 }
