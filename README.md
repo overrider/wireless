@@ -13,7 +13,7 @@ Installation:
 cp wireless /usr/local/bin/
 cp wireless.cfg /etc/
 
-Useage:
+Usage:
 lists all wireless networks configured inside your config
 ./wireless
 
