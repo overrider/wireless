@@ -120,7 +120,7 @@ sub configure_wlan {
 	my ($interface, $nwid, $wpakey,$type) = @_; 
 	print "Configuring SSID $nwid on $interface\n";
 	if(lc($type) eq 'open'){
-		system("ifconfig $interface nwid \"$nwid\"");
+		system("ifconfig $interface nwid \"$nwid\" -wpakey");
 	} elsif(lc($type) eq 'wpa'){
 		system("ifconfig $interface nwid \"$nwid\" wpakey \"$wpakey\"");
 	} else {
