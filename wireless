@@ -81,7 +81,7 @@ print "Listing available networks:\n";
 print "-" x 50 . "\n\n";
 
 printf("%-20s %-20s %-10s\n","Network Name","SSID","Type");
-foreach my $index (keys %networks){
+foreach my $index (sort (keys %networks)){
 	my %network = %{$networks{$index}};
 	printf("%-20s %-20s %-10s\n",$network{"name"},($network{"nwid"} || "-"),$network{"type"});
 }
@@ -106,6 +106,9 @@ if(@ARGV){
 			die ("Could not find name of wired interface") unless $wired_interface;
 			ifdown($wireless_interface);
 			dhclient($wired_interface);
+		} elsif ($connect{'type'} eq 'airplane') {
+			ifdown($wired_interface);
+			ifdown($wireless_interface);
 		} else {
 			ifdown($wired_interface) if $wired_interface;
 			configure_wlan($wireless_interface,$connect{'nwid'},$connect{'wpakey'},$connect{'type'});
