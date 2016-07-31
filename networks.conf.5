@@ -1,0 +1,87 @@
+.Dd $Mdocdate: July 31 2016 $
+.Dt "NETWORKS.CONF VERSION" 5
+.Os
+.Sh NAME
+.Nm networks.conf
+.Nd network configuration file
+.Sh DESCRIPTION
+The
+.Nm
+file contains configuration information for
+.Xr network 1 .
+.Pp
+It consists of two sections:
+.Bl -tag -width Ds
+.It Ic [config]
+containing common configuration information;
+.It Ic [network]
+containing specific network informations.
+.El
+.Pp
+There can only be one
+.Ar [config]
+section, but as many
+.Ar [network]
+sections as you require.
+.Pp
+In the sections, the configuration format is
+.Em key=value .
+Do not add quotes around values.
+.Sh CONFIG
+Required options:
+.Bl -tag -width Ds
+.It Ic int_wlan
+Name of the wireless interface.
+.It Ic lladdr_default
+Default link layer address (MAC address), in the format xx:xx:xx:xx:xx:xx.
+.It Ic hostname_default
+Default DHCP hostname.
+.El
+.Pp
+Optional option:
+.Bl -tag -width Ds
+.It Ic int_wired
+Name of the wired interface, if you use it.
+.El
+.Sh NETWORK
+Common options to all network types:
+.Bl -tag -width Ds
+.It Ic name
+Name of the network. Used to connect to it.
+.It Ic type
+Type of network. Accepted values are:
+.Em wired
+(for a wired network),
+.Em open
+or
+.Em wpa
+(for a wireless network).
+.It Ic lladdr
+Link layer address for this network. Accepted values are
+.Em default ,
+.Em random
+for a random address, or a manual address in the format
+.Em xx:xx:xx:xx:xx:xx .
+.It Ic hostname
+DHCP hostname for this network.
+.El
+.Pp
+Required option for all wireless networks:
+.Bl -tag -width Ds
+.It Ic nwid
+The SSID of the wireless.
+.El
+.Pp
+Required option for WPA wireless networks:
+.Bl -tag -width Ds
+.It Ic wpakey
+The wireless key.
+.El
+.Sh SEE ALSO
+.Xr network 1
+.Sh COPYRIGHT
+.Ic network
+is Copyright (C) 2016 ARClab \- Lionel Riem https://arclab.ch/
+.Pp
+.Ic network
+is based on "wireless" which is Copyright (C) 2012 BSDGuides.org

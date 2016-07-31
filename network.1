@@ -1,0 +1,65 @@
+.Dd $Mdocdate: July 31 2016 $
+.Dt "NETWORK VERSION" 1
+.Os
+.Sh NAME
+.Nm network
+.Nd command line network manager
+.Sh SYNOPSIS
+.Nm
+.Op Ar command
+.Op Ar argument
+.Sh DESCRIPTION
+.Nm
+is a simple command line network manager for OpenBSD.
+.Pp
+It can scan available wireless networks, join configured ones (including wired
+networks) and put the system in "airplane" mode by bringing down network
+interfaces.
+.Pp
+It is also capable of setting custom DHCP hostnames and link layer addresses
+per network.
+.Pp
+The commands are as follows:
+.Bl -tag -width Ds
+.It Ic list
+List configured networks.
+.It Ic scan
+Scan available networks (requires root privileges). Warning: scanning
+disconnects from current wireless network!
+.It Ic airplane
+Disable all interfaces (requires root privileges).
+.It Ic connect Ar network
+Connect to configured network (requires root privileges).
+.It Ic help
+Print help.
+.El
+.Pp
+By design,
+.Nm
+doesn't automatically connect to known networks. You have to manually issue the
+connection command when you want to join a network.
+.Sh LIMITS
+For the time being,
+.Nm
+is not capable of handling static IP configurations nor does it manage IPv6 addresses.
+.Pp
+Furthermore,
+.Nm
+cannot handle
+.Xr dhclient.conf 5
+files with custom parameters. It always replaces the file with its own.
+.Sh FILES
+.Bl -tag -width Ds
+.It Ic /etc/networks.conf
+Configuration file
+.El
+.Sh BUGS
+None known.
+.Sh SEE ALSO
+.Xr networks.conf 5
+.Sh COPYRIGHT
+.Nm
+is Copyright (C) 2016 ARClab \- Lionel Riem https://arclab.ch/
+.Pp
+.Nm
+is based on "wireless" which is Copyright (C) 2012 BSDGuides.org

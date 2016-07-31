@@ -1,23 +1,12 @@
-wireless
-========
+network
+=======
 
-Very simple OpenBSD console wireless connection manager.
+`network` is a simple command line network manager for OpenBSD.
 
-Store your usually used network configs inside a simple config file
-and save yourself typing by connecting to your wlan by issuing 
-./wireless network-name inside your console. Wireless will issue
-the right ifconfig commands to setup your connection and then get
-an IP address via DHCP.
+It can scan available wireless networks, join configured ones (including wired networks) and put the system in "airplane" mode by bringing down network interfaces.
 
-Installation:
-cp wireless /usr/local/bin/
-cp wireless.cfg /etc/
+It is also capable of setting custom DHCP hostnames and link layer addresses (MAC addresses) per network.
 
-Usage:
-lists all wireless networks configured inside your config
-./wireless
+By design, `network` doesn't automatically connect to known networks. You have to manually issue the connection command when you want to join a network.
 
-connects to network-name as long as it was found inside your config and is in range
-./wireless network-name 	
-
-Want to see more on how it works? http://www.bsdguides.org/2012/a-simple-console-wireless-network-manager-for-openbsd/
+See the man page for more information.

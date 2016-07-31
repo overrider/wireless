@@ -1,0 +1,324 @@
+#!/usr/bin/perl
+
+# Copyright 2016 ARClab, Lionel Riem - https://arclab.ch/
+# Copyright 2012 BSDGuides.org (https://github.com/overrider/wireless)
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+use strict;
+use warnings;
+
+
+#
+# Configuration
+#
+
+my $config_file = "/etc/networks.conf";
+
+
+#
+# Declarations
+#
+
+my $version = "VERSION";
+
+sub usage;
+sub list;
+sub scan;
+sub airplane;
+sub net_connect;
+
+sub check_root;
+sub dhcp_client;
+sub dhcp_hostname;
+sub wlan_config;
+sub if_lladdr;
+sub if_down;
+
+
+# 
+# Check the environment and read the configuration file
+#
+
+my %configuration;
+my $current;
+my $network;
+
+die("Error: you are not running OpenBSD.\n") unless $^O eq "openbsd";
+open FILE,"<",$config_file
+    or die("Error: could not open configuration file ($config_file).\n");
+
+while(<FILE>) {
+    chomp;
+    next if($_ =~ m/^\s*$/);
+    next if($_ =~ m/^#/);
+
+    if($_ eq "[config]") {
+        $current = "config";
+        next;
+    }
+    if($_ eq "[network]") {
+        $current = "network";
+        $network += 1;
+        next;
+    }
+    die("Config error: key=value pair expected on line $..\n")
+        unless $_ =~ m/^\w+=.+$/;
+
+    my ($key,$value) = split("=",$_);
+    if($current eq "config") {
+        $configuration{$current}{$key} = $value;
+    } elsif($current eq "network") {
+        $configuration{$current}{$network}{$key} = $value;
+    }
+}
+
+close(FILE);
+
+
+#
+# Check the configuration and parse commands
+#
+
+my %config    = %{$configuration{"config"}};
+my %networks  = %{$configuration{"network"}};
+my $int_wlan  = $config{"int_wlan"}
+    or die("Config error: could not find the wireless interface.\n");
+my $int_wired = $config{"int_wired"};
+
+if(@ARGV) {
+    my $command = shift(@ARGV);
+    my $argument = shift(@ARGV);
+
+       if($command eq "list")       { list(); }
+    elsif($command eq "scan")       { scan(); }
+    elsif($command eq "airplane")   { airplane(); }
+    elsif($command eq "connect")    { net_connect($argument); }
+    else                            { usage(); }
+} else {
+    usage();
+}
+
+
+#
+# Display usage/help
+#
+
+sub usage {
+    print "Network $version -- Command line network manager\n";
+    print "\n";
+    print "Usage: network [command] [argument]\n";
+    print "\n";
+    print "Commands:\n";
+    print "   list                List configured networks.\n";
+    print "   scan                Scan available wireless networks (requires ";
+    print                         "root privileges).\n";
+    print "                       Warning: scanning disconnects from current ";
+    print                         "wireless network!\n";
+    print "   airplane            Disable all interfaces (requires root ";
+    print                         "privileges).\n";
+    print "   connect [network]   Connect to configured network (requires ";
+    print                         "root privileges).\n";
+    print "   help                Print help (this message).\n";
+}
+
+
+#
+# List configured networks
+#
+
+sub list {
+    printf("%-20s %-20s %-10s %-20s %-20s\n", "Network name", "SSID", "Type",
+        "DHCP hostname", "Link layer addr");
+    print "-" x 91 . "\n";
+    foreach my $index (sort (keys %networks)) {
+        my %net = %{$networks{$index}};
+        printf("%-20s %-20s %-10s %-20s %-20s\n", $net{"name"},
+            ($net{"nwid"} || "-"), $net{"type"}, ($net{"hostname"} || "-"),
+            ($net{"lladdr"} || "-"));
+    }
+    print "-" x 91 . "\n";
+}
+
+
+#
+# Scan available wireless networks
+#
+
+sub scan {
+    my $int = $config{"int_wlan"};
+    check_root();
+
+    print "Scanning available wireless networks...\n";
+    system("ifconfig $int -nwid -chan down");
+    my @result = `ifconfig $int scan`;
+    chomp @result;
+    my @networks = grep(/chan/, @result);
+    printf("%-30s %-5s %-5s %-50s\n", "Network SSID", "Chan", "Sign",
+        "Parameters");
+    print "-" x 90 . "\n";
+    foreach my $line (@networks) {
+        $line =~ /^[[:space:]]*nwid (.*) chan (\d+) .* (\d+%) \d+M (.*)$/;
+        printf("%-30s %-5s %-5s %-50s\n", $1, $2, $3, $4);
+    }
+    print "-" x 90 . "\n";
+}
+
+
+#
+# Puts the laptop in "airplane" mode by disabling all interfaces
+#
+
+sub airplane {
+    my $int_wired = $config{"int_wired"};
+    my $int_wlan = $config{"int_wlan"};
+    check_root();
+    if_down($int_wired) if $int_wired;
+    if_down($int_wlan);
+    print "System now in airplane mode.\n";
+}
+
+
+#
+# Connects to a network
+#
+
+sub net_connect {
+    my $net = shift;
+    check_root();
+
+    my $int_wlan = $config{"int_wlan"};
+    my $int_wired = $config{"int_wired"};
+
+    my %connect;
+    foreach my $index(keys %networks) {
+        my %network = %{$networks{$index}};
+        if(uc($network{"name"}) eq uc($net)) {
+            %connect = %network;
+        } else {
+            next;
+        }
+    }
+
+    if(scalar(keys %connect) > 0) {
+        if(uc($connect{"type"}) eq uc("wired")) {
+            die("Error: could not find the wired interface.\n")
+                unless $int_wired;
+            if_down($int_wlan);
+            if_lladdr($int_wired, $connect{"lladdr"});
+            dhcp_hostname($connect{"hostname"});
+            dhcp_client($int_wired);
+        } else {
+            if_down($int_wired) if $int_wired;
+            if_lladdr($int_wlan, $connect{"lladdr"});
+            dhcp_hostname($connect{"hostname"});
+            wlan_config($int_wlan, $connect{"nwid"}, $connect{"wpakey"},
+                $connect{"type"});
+            dhcp_client($int_wlan);
+        }
+    } else {
+        print "Error: network \"$net\" not found in the configuration file.\n";
+    }
+}
+
+
+#
+# Check if running as root or die
+#
+
+sub check_root {
+    die("Error: this operation requires root privilege.\n") unless $> eq 0;
+}
+
+
+#
+# Start DHCP client
+#
+
+sub dhcp_client {
+    my $interface = shift;
+    print "Getting an IP address on $interface via DHCP.\n";
+    system("dhclient $interface");
+}
+
+
+#
+# Update hostname sent to DHCP
+#
+
+sub dhcp_hostname {
+    my $hostname = shift;
+    if(uc($hostname) eq uc("default")) {
+        $hostname = $config{"hostname_default"};
+    }
+    if(uc($hostname) eq uc("none")) {
+        print "Removing DHCP hostname (won't be sent).\n";
+        system("echo '#send host-name \"none\";' > /etc/dhclient.conf");
+    } else {
+        print "Changing DHCP hostname to \"$hostname\".\n";
+        system("echo 'send host-name \"$hostname\";' > /etc/dhclient.conf");
+    }
+}
+
+
+#
+# Set interface link layer address
+#
+
+sub if_lladdr {
+    my ($int, $lladdr) = @_;
+    if(uc($lladdr) eq uc("default")) {
+        $lladdr = $config{"lladdr_default"};
+    }
+    print "Setting link layer address for $int to $lladdr.\n";
+    system("ifconfig $int lladdr $lladdr");
+}
+
+
+#
+# Configure the WLAN interface
+#
+
+sub wlan_config {
+    my ($int, $nwid, $key, $type) = @_;
+    print "Configuring SSID \"$nwid\" on $int.\n";
+    if(uc($type) eq uc("open")) {
+        system("ifconfig $int nwid \"$nwid\" -wpakey");
+    } elsif(uc($type) eq uc("wpa")) {
+        system("ifconfig $int nwid \"$nwid\" wpakey \"$key\"");
+    } else {
+        die("Error: unknown network type \"$type\".\n");
+    }
+}
+
+
+#
+# Bring interface down
+#
+
+sub if_down {
+    my $int = shift;
+    my $int_wlan = $config{"int_wlan"};
+    print "Bringing $int down.\n";
+    if($int eq $int_wlan) {
+        system("ifconfig $int -nwid -chan down");
+    } else {
+        system("ifconfig $int down");
+    }
+}
